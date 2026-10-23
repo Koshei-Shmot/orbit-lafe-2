@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@layer base {
+body {
+font-family: 'Plus Jakarta Sans', sans-serif;
+}
+h1, h2, h3, .font-serif {
+font-family: 'Playfair Display', serif;
+}
+}
+/* Кастомные анимации для 2D симулятора ходьбы */
+@keyframes walk {
+0%, 100% { transform: translateY(0) rotate(0deg); }
+25% { transform: translateY(-8px) rotate(6deg); }
+75% { transform: translateY(-8px) rotate(-6deg); }
+}
+.animate-walk {
+animation: walk 0.6s infinite ease-in-out;
+}
+@keyframes bob {
+0%, 100% { transform: translateY(0); }
+50% { transform: translateY(-10px); }
+}
+.animate-bob {
+animation: bob 3s infinite ease-in-out;
+}
