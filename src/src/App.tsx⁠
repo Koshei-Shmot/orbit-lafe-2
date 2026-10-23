@@ -1,0 +1,497 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Heart, Smile, Coins, User, ChevronRight, Mountain, Cloud, TreePine, Building, Users, Sparkles } from 'lucide-react';
+
+// Типы данных
+type GameState = 'menu' | 'playing' | 'dead';
+
+interface Player {
+  name: string;
+  gender: 'female' | 'male';
+  country: string;
+  birthDate: string;
+  socialClass: string;
+  health: number;
+  happiness: number;
+  money: number;
+  age: number;
+  friends: number;
+  flags: Record<string, boolean>;
+}
+
+interface Choice {
+  text: string;
+  effect: (p: Player) => Player;
+}
+
+interface GameEvent {
+  text: (p: Player) => string;
+  choices: Choice[];
+}
+
+export default function App() {
+  const [gameState, setGameState] = useState<GameState>('menu');
+  const [player, setPlayer] = useState<Player>({
+    name: 'Ася',
+    gender: 'female',
+    country: 'Россия',
+    birthDate: '2025-04-16',
+    socialClass: 'Скромный достаток',
+    health: 100,
+    happiness: 80,
+    money: 1000,
+    age: 0,
+    friends: 2,
+    flags: {},
+  });
+
+  const [distance, setDistance] = useState(0);
+  const [isWalking, setIsWalking] = useState(false);
+  const [activeEvent, setActiveEvent] = useState<GameEvent | null>(null);
+  const [lastWords, setLastWords] = useState<string>('');
+
+  const getBirthYear = () => parseInt(player.birthDate.split('-')[0]) || 2025;
+
+  const playerRef = useRef(player);
+  useEffect(() => { playerRef.current = player; }, [player]);
+
+  // Генератор случайных жизненных событий
+  const generateRandomEvent = (current: Player): GameEvent => {
+    const age = current.age;
+
+    if (age <= 6) {
+      return {
+        text: (p) => `Вам исполнилось ${p.age} лет. Вы познаете этот мир через игры и первые детские шаги.`,
+        choices: [
+          { text: 'Пойти в детский сад, завести новых друзей', effect: (p) => ({ ...p, happiness: p.happiness + 5, friends: p.friends + 1, age: p.age + 1 }) },
+          { text: 'Больше времени проводить дома с книгами и игрушками', effect: (p) => ({ ...p, happiness: p.happiness + 3, age: p.age + 1 }) }
+        ]
+      };
+    } else if (age > 6 && age < 18) {
+      return {
+        text: (p) => `Вам ${p.age} лет. Школьные будни, первые компании и поиск своего места в коллективе.`,
+        choices: [
+          { text: 'Усердно учиться, готовиться к экзаменам', effect: (p) => ({ ...p, happiness: p.happiness - 2, money: p.money + 500, age: p.age + 1 }) },
+          { text: 'Связаться с сомнительной компанией на районе', effect: (p) => ({ ...p, happiness: p.happiness + 10, health: p.health - 10, flags: { ...p.flags, bad_company: true }, age: p.age + 1 }) },
+          { text: 'Заниматься спортом и творчеством', effect: (p) => ({ ...p, health: p.health + 5, happiness: p.happiness + 5, age: p.age + 1 }) }
+        ]
+      };
+    } else if (age >= 18 && age < 40) {
+      return {
+        text: (p) => `Вам ${p.age} лет. Время самостоятельной взрослой жизни, работы и поиска любви.`,
+        choices: [
+          { text: 'С головой уйти в карьеру и заработок денег', effect: (p) => ({ ...p, money: p.money + 15000, health: p.health - 15, happiness: p.happiness - 5, age: p.age + 1 }) },
+          { text: 'Искать вторую половинку, строить семью', effect: (p) => ({ ...p, happiness: p.happiness + 15, flags: { ...p.flags, married: true }, age: p.age + 1 }) },
+          { text: 'Попробовать сомнительные вещества на вечеринке', effect: (p) => ({ ...p, health: p.health - 30, happiness: p.happiness + 20, flags: { ...p.flags, addicted: true }, age: p.age + 1 }) }
+        ]
+      };
+    } else {
+      return {
+        text: (p) => `Вам ${p.age} лет. Зрелость и подведение итогов прожитых лет.`,
+        choices: [
+          { text: 'Спокойная размеренная жизнь и забота о здоровье', effect: (p) => ({ ...p, health: p.health + 5, age: p.age + 1 }) },
+          { text: 'Рискованные инвестиции или попытка изменить всё', effect: (p) => ({ ...p, money: p.money + (Math.random() > 0.5 ? 20000 : -15000), age: p.age + 1 }) }
+        ]
+      };
+    }
+  };
+
+  // Игровой цикл ходьбы (60 FPS)
+  useEffect(() => {
+    if (gameState !== 'playing' || !isWalking) return;
+
+    const interval = setInterval(() => {
+      setDistance(prevDist => {
+        const nextDist = prevDist + 5;
+        const nextEventTargetX = (playerRef.current.age + 1) * 1200;
+
+        if (nextDist >= nextEventTargetX) {
+          setIsWalking(false);
+          const nextAge = playerRef.current.age + 1;
+          
+          if (nextAge > 85 || playerRef.current.health <= 0) {
+            // Наступила смерть
+            setLastWords(`Вы прожили яркую жизнь в ${playerRef.current.country}. Ваша история оставила глубокий след.`);
+            setGameState('dead');
+            return nextEventTargetX;
+          }
+
+          setActiveEvent(generateRandomEvent({ ...playerRef.current, age: nextAge }));
+          return nextEventTargetX;
+        }
+        return nextDist;
+      });
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [gameState, isWalking]);
+
+  const startGame = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!player.name) return;
+
+    setDistance(0);
+    setIsWalking(true);
+    setActiveEvent(null);
+    setGameState('playing');
+  };
+
+  const handleChoice = (choice: Choice) => {
+    const updated = choice.effect(player);
+    setPlayer(updated);
+    if (updated.health > 0 && updated.age <= 85) {
+      setActiveEvent(null);
+      setIsWalking(true);
+    } else {
+      setLastWords(`История завершилась в возрасте ${updated.age} лет.`);
+      setGameState('dead');
+    }
+  };
+
+  // Генерация ландшафта (деревья, здания) по чанкам
+  const scenery = useMemo(() => {
+    const chunkIndex = Math.floor(distance / 1200);
+    const items = [];
+    for (let i = chunkIndex - 1; i <= chunkIndex + 1; i++) {
+      if (i < 0) continue;
+      const baseX = i * 1200;
+      items.push({ id: `t1_${i}`, type: 'tree', x: baseX + 300, scale: 0.9 });
+      items.push({ id: `b1_${i}`, type: 'building', x: baseX + 700, scale: 1 });
+    }
+    return items;
+  }, [Math.floor(distance / 1200)]);
+
+  // --- 1. ЭКРАН МЕНЮ (Точно по твоему первому макету) ---
+  if (gameState === 'menu') {
+    return (
+      <div className="min-h-screen bg-[#F7F3EB] text-[#231F32] p-6 md:p-12 flex flex-col justify-between">
+        <header className="flex justify-between items-center max-w-7xl mx-auto w-full">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#231F32] flex items-center justify-center text-white">
+              <Sparkles className="w-5 h-5 text-[#C67B66]" />
+            </div>
+            <span className="font-serif font-bold text-xl tracking-wider">LIFE ORBIT</span>
+          </div>
+          <div className="text-xs uppercase tracking-widest text-[#8A857D] font-medium hidden sm:block">
+            Каждая жизнь начинается с мгновения
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-12 items-center my-auto py-8">
+          <div className="lg:col-span-6 space-y-6">
+            <div className="text-xs uppercase tracking-widest text-[#8A857D] font-semibold">
+              — Симулятор судьбы · 01
+            </div>
+            <h1 className="text-5xl md:text-7xl font-serif font-normal leading-[1.1] text-[#231F32]">
+              У каждой <br />жизни <span className="italic font-light text-[#C67B66]">своя</span> <br />орбита.
+            </h1>
+            <p className="text-[#6B655D] text-lg max-w-md leading-relaxed">
+              Выбери место и точный миг рождения. Всё остальное — решения, встречи и случайности — станет твоей историей.
+            </p>
+
+            {/* Глобус-декор */}
+            <div className="w-64 h-64 rounded-full bg-[#231F32]/5 border border-[#231F32]/10 relative overflow-hidden flex items-center justify-center shadow-inner mt-8">
+              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#231F32_1px,transparent_1px)] [background-size:16px_16px]"></div>
+              <div className="text-center">
+                <div className="text-xs font-bold uppercase tracking-widest text-[#C67B66]">{player.country}</div>
+                <div className="text-[10px] text-[#8A857D]">Перетаскивай глобус, чтобы вращать</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Форма создания персонажа */}
+          <div className="lg:col-span-6 bg-white/80 backdrop-blur-md p-8 md:p-10 rounded-[2.5rem] border border-[#E5E0D8] shadow-xl">
+            <div className="flex justify-between items-center mb-6 border-b border-[#E5E0D8] pb-4">
+              <h2 className="font-serif font-bold text-xl text-[#231F32]">Точка рождения</h2>
+              <span className="text-[10px] uppercase tracking-widest text-[#8A857D] font-semibold">Начало истории</span>
+            </div>
+
+            <form onSubmit={startGame} className="space-y-6">
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-[#8A857D] font-bold mb-2">Имя персонажа</label>
+                <input
+                  type="text"
+                  value={player.name}
+                  onChange={e => setPlayer({ ...player, name: e.target.value })}
+                  placeholder="Например, Ася"
+                  className="w-full bg-[#F7F3EB] border border-[#E5E0D8] rounded-2xl px-4 py-3.5 text-[#231F32] focus:outline-none focus:border-[#231F32] transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-[#8A857D] font-bold mb-2">Пол</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPlayer({ ...player, gender: 'female' })}
+                    className={`py-3 rounded-xl font-medium text-sm transition-all ${player.gender === 'female' ? 'bg-[#231F32] text-white shadow-md' : 'bg-[#F7F3EB] text-[#231F32] border border-[#E5E0D8]'}`}
+                  >
+                    Девочка
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlayer({ ...player, gender: 'male' })}
+                    className={`py-3 rounded-xl font-medium text-sm transition-all ${player.gender === 'male' ? 'bg-[#231F32] text-white shadow-md' : 'bg-[#F7F3EB] text-[#231F32] border border-[#E5E0D8]'}`}
+                  >
+                    Мальчик
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-[#8A857D] font-bold mb-2">Страна рождения</label>
+                  <select
+                    value={player.country}
+                    onChange={e => setPlayer({ ...player, country: e.target.value })}
+                    className="w-full bg-[#F7F3EB] border border-[#E5E0D8] rounded-2xl px-4 py-3.5 text-[#231F32] focus:outline-none focus:border-[#231F32]"
+                  >
+                    <option value="Россия">Россия</option>
+                    <option value="Германия">Германия</option>
+                    <option value="США">США</option>
+                    <option value="Япония">Япония</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-[#8A857D] font-bold mb-2">Дата рождения</label>
+                  <input
+                    type="date"
+                    value={player.birthDate}
+                    onChange={e => setPlayer({ ...player, birthDate: e.target.value })}
+                    className="w-full bg-[#F7F3EB] border border-[#E5E0D8] rounded-2xl px-4 py-3.5 text-[#231F32] focus:outline-none focus:border-[#231F32]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-[#8A857D] font-bold mb-2">Семья</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Тепло и забота', 'Скромный достаток', 'Непростые отношения'].map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setPlayer({ ...player, socialClass: c })}
+                      className={`p-3 rounded-xl text-xs font-semibold text-center transition-all ${player.socialClass === c ? 'bg-[#C67B66] text-white shadow-md' : 'bg-[#F7F3EB] text-[#231F32] border border-[#E5E0D8]'}`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-[#231F32] hover:bg-[#352F44] text-white py-4 rounded-2xl font-semibold shadow-lg transition-all flex items-center justify-center gap-2 group mt-4"
+              >
+                <span>Начать эту жизнь</span>
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </form>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // --- 2. ЭКРАН ИГРЫ (2D Скроллер с персонажем) ---
+  if (gameState === 'playing') {
+    return (
+      <div className="min-h-screen bg-[#F7F3EB] text-[#231F32] flex flex-col relative overflow-hidden select-none">
+        
+        {/* HUD (Панель статусов вверху) */}
+        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-40 pointer-events-none">
+          <div className="bg-white/90 backdrop-blur border border-[#E5E0D8] px-5 py-3 rounded-2xl shadow-sm pointer-events-auto">
+            <div className="font-serif text-xl font-bold">{player.name}</div>
+            <div className="text-xs text-[#8A857D] font-medium tracking-wide uppercase">
+              Возраст: {player.age} лет · {getBirthYear() + player.age} год
+            </div>
+          </div>
+          
+          <div className="flex gap-3 pointer-events-auto">
+            <div className="bg-white/90 backdrop-blur border border-[#E5E0D8] px-4 py-2.5 rounded-2xl shadow-sm flex items-center gap-2">
+              <Heart className="w-4 h-4 text-[#C67B66]" />
+              <span className="font-bold text-sm">{player.health}%</span>
+            </div>
+            <div className="bg-white/90 backdrop-blur border border-[#E5E0D8] px-4 py-2.5 rounded-2xl shadow-sm flex items-center gap-2">
+              <Smile className="w-4 h-4 text-[#C67B66]" />
+              <span className="font-bold text-sm">{player.happiness}%</span>
+            </div>
+            <div className="bg-white/90 backdrop-blur border border-[#E5E0D8] px-4 py-2.5 rounded-2xl shadow-sm flex items-center gap-2">
+              <Coins className="w-4 h-4 text-[#C67B66]" />
+              <span className="font-bold text-sm">{player.money} ₽</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2D СЦЕНА ХОДЬБЫ */}
+        <div className="flex-1 relative flex flex-col justify-end pb-16 overflow-hidden">
+          
+          {/* Дальний фон: Горы */}
+          <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ transform: `translateX(-${(distance * 0.1) % 1500}px)` }}>
+            <Mountain className="absolute bottom-28 left-[10%] w-64 h-64 text-[#8A857D]" />
+            <Mountain className="absolute bottom-28 left-[80%] w-96 h-96 text-[#8A857D]" />
+          </div>
+
+          {/* Облака */}
+          <div className="absolute top-28 inset-x-0 opacity-30 pointer-events-none" style={{ transform: `translateX(-${(distance * 0.05) % 1200}px)` }}>
+            <Cloud className="absolute top-0 left-[15%] w-20 h-20 text-[#8A857D] animate-bob" />
+            <Cloud className="absolute top-10 left-[65%] w-28 h-28 text-[#8A857D] animate-bob" style={{ animationDelay: '1s' }} />
+          </div>
+
+          {/* Декорации (Деревья и здания) */}
+          <div className="absolute bottom-20 left-0 right-0 h-64 pointer-events-none">
+            {scenery.map(item => {
+              const renderX = item.x - distance + window.innerWidth / 2;
+              if (renderX < -300 || renderX > window.innerWidth + 300) return null;
+              return (
+                <div key={item.id} className="absolute bottom-0 text-[#8A857D]" style={{ left: renderX }}>
+                  {item.type === 'tree' ? <TreePine className="w-28 h-28 opacity-70" /> : <Building className="w-40 h-40 opacity-50" />}
+                </div>
+              );
+            })}
+
+            {/* Иконка события на пути */}
+            {[player.age + 1].map(targetAge => {
+              const eventX = targetAge * 1200;
+              const renderX = eventX - distance + window.innerWidth / 2;
+              if (renderX < -100 || renderX > window.innerWidth + 100) return null;
+              return (
+                <div key={`event_${targetAge}`} className="absolute bottom-4 text-[#C67B66]" style={{ left: renderX }}>
+                  <Users className="w-14 h-14 animate-bob" />
+                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">
+                    Судьба ({targetAge} лет)
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Персонаж (всегда по центру) */}
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20">
+            <div className={`relative ${isWalking ? 'animate-walk' : 'animate-idle'}`}>
+              <div className="w-14 h-14 bg-[#231F32] rounded-full border-4 border-[#F7F3EB] shadow-xl flex items-center justify-center">
+                <User className="w-7 h-7 text-white" />
+              </div>
+              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-8 h-2 bg-black/15 rounded-full blur-[2px]"></div>
+            </div>
+          </div>
+
+          {/* Земля */}
+          <div className="absolute bottom-0 w-full h-20 bg-[#231F32] z-30">
+            <div className="w-full h-full opacity-10" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '24px 24px', backgroundPosition: `${-distance}px 0` }}></div>
+          </div>
+        </div>
+
+        {/* МОДАЛЬНОЕ ОКНО СОБЫТИЯ */}
+        {activeEvent && !isWalking && (
+          <div className="absolute inset-0 bg-[#231F32]/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-[2.5rem] p-8 md:p-10 max-w-lg w-full shadow-2xl border border-[#E5E0D8]">
+              <div className="text-[10px] uppercase tracking-widest text-[#8A857D] font-bold mb-3 flex items-center gap-2">
+                <span className="w-5 h-px bg-[#8A857D]"></span>
+                Возраст: {player.age} лет
+              </div>
+              <h3 className="text-2xl font-serif font-bold text-[#231F32] mb-6 leading-relaxed">
+                {activeEvent.text(player)}
+              </h3>
+              
+              <div className="space-y-3">
+                {activeEvent.choices.map((choice, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleChoice(choice)}
+                    className="w-full text-left bg-[#F7F3EB] hover:bg-[#231F32] hover:text-white border border-[#E5E0D8] hover:border-[#231F32] text-[#231F32] p-4 rounded-2xl transition-all flex items-center justify-between group font-medium text-sm shadow-sm"
+                  >
+                    <span>{choice.text}</span>
+                    <ChevronRight className="w-4 h-4 text-[#8A857D] group-hover:text-white transition-colors" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // --- 3. ЭКРАН ФИНАЛА (Точно по твоему второму макету) ---
+  return (
+    <div className="min-h-screen bg-[#F7F3EB] text-[#231F32] p-6 md:p-12 flex flex-col justify-between">
+      <header className="flex justify-between items-center max-w-6xl mx-auto w-full">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[#231F32] flex items-center justify-center text-white">
+            <Sparkles className="w-5 h-5 text-[#C67B66]" />
+          </div>
+          <span className="font-serif font-bold text-xl tracking-wider">LIFE ORBIT</span>
+        </div>
+        <div className="text-xs uppercase tracking-widest text-[#8A857D] font-medium hidden sm:block">
+          История завершена
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto w-full my-auto">
+        <div className="bg-[#1E192B] text-white rounded-[3rem] p-8 md:p-14 shadow-2xl relative overflow-hidden border border-white/10">
+          <div className="absolute top-12 right-12 opacity-10">
+            <Sparkles className="w-64 h-64" />
+          </div>
+
+          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            
+            {/* Тёмная планета */}
+            <div className="lg:col-span-5 flex justify-center">
+              <div className="w-56 h-56 md:w-64 md:h-64 rounded-full bg-gradient-to-tr from-[#120F1A] to-[#352F44] border border-white/20 relative shadow-2xl flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full shadow-[0_0_50px_rgba(198,123,102,0.2)]"></div>
+                <div className="w-12 h-12 rounded-full bg-[#C67B66]/20 flex items-center justify-center border border-[#C67B66]/40">
+                  <Sparkles className="w-6 h-6 text-[#C67B66]" />
+                </div>
+              </div>
+            </div>
+
+            {/* Статистика финала */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="text-xs uppercase tracking-widest text-[#C67B66] font-semibold">
+                — Игра окончена · Последняя глава
+              </div>
+              <h1 className="text-4xl md:text-5xl font-serif font-normal leading-tight">
+                Твоя жизнь оставила след.
+              </h1>
+              <p className="text-white/70 text-sm leading-relaxed">
+                {lastWords} Время остановилось, а память о решениях и близких осталась.
+              </p>
+
+              <div className="grid grid-cols-3 gap-4 pt-2">
+                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+                  <div className="text-[10px] uppercase tracking-wider text-white/50 mb-1">Прожито</div>
+                  <div className="font-serif text-xl font-bold">{player.age} лет</div>
+                </div>
+                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+                  <div className="text-[10px] uppercase tracking-wider text-white/50 mb-1">Отношения</div>
+                  <div className="font-serif text-xl font-bold">{player.happiness}%</div>
+                </div>
+                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+                  <div className="text-[10px] uppercase tracking-wider text-white/50 mb-1">След решений</div>
+                  <div className="font-serif text-xl font-bold">{Object.keys(player.flags).length + 1}</div>
+                </div>
+              </div>
+
+              <div className="bg-white/5 border border-white/10 p-4 rounded-2xl text-xs text-white/80 italic">
+                «Вы прошли свой путь в стране {player.country}, оставив позади историю с выборами и последствиями.»
+              </div>
+
+              <button
+                onClick={() => setGameState('menu')}
+                className="w-full bg-[#E5B299] hover:bg-[#DDAFA3] text-[#231F32] py-4 rounded-2xl font-semibold shadow-xl transition-all flex items-center justify-center gap-2 group mt-4"
+              >
+                <span>Начать новую жизнь</span>
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="text-center text-xs text-[#8A857D] uppercase tracking-widest font-medium">
+        Конец одной истории · Начало другой
+      </footer>
+    </div>
+  );
+}
